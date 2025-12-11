@@ -1,9 +1,9 @@
 public class T2 {
-    private static final java.util.ArrayList<String[]> USERS = new java.util.ArrayList<String[]>();
-    private static int loggedIndex = -1;
 
+    private static final java.util.HashMap<String, User> USERS_BY_USERNAME = new java.util.HashMap<String, User>();
+    private static final java.util.HashMap<String, User> USERS_BY_CARD = new java.util.HashMap<String, User>();
+    private static User loggedUser = null;
     private static long nextCard = 6037000000000000L;
-
     public static void main(String[] args) throws Exception {
         java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
         String line;
@@ -89,13 +89,11 @@ public class T2 {
         String username = tokens[1];
         String password = tokens[2];
 
-        for (int i = 0; i < USERS.size(); i++) {
-            String[] user = USERS.get(i);
-            if (user[0].equals(username) && user[1].equals(password)) {
-                loggedIndex = i;
-                System.out.println("Login successful.");
-                return;
-            }
+        User u = USERS_BY_USERNAME.get(username);
+        if (u != null && u.password.equals(password)) {
+            loggedUser = u;
+            System.out.println("Login successful.");
+            return;
         }
         System.out.println("Error: invalid username or password.");
     }
@@ -105,7 +103,7 @@ public class T2 {
             System.out.println("Error: You should login first.");
             return;
         }
-        System.out.println("Current balance: " + USERS.get(loggedIndex)[6]);
+        System.out.println("Current balance: " + loggedUser.balance);
     }
 
     private static void handleDeposit(String[] tokens) {
@@ -123,10 +121,10 @@ public class T2 {
             return;
         }
 
-        double balance = parseDouble(USERS.get(loggedIndex)[6]).doubleValue();
+        double balance = loggedUser.balance;
         balance += amount;
-        USERS.get(loggedIndex)[6] = String.valueOf(balance);
-        System.out.println("Deposit successful. Current balance: " + USERS.get(loggedIndex)[6]);
+        loggedUser.balance = balance;
+        System.out.println("Deposit successful. Current balance: " + loggedUser.balance);
     }
 
     private static void handleWithdraw(String[] tokens) {
@@ -144,15 +142,15 @@ public class T2 {
             return;
         }
 
-        double balance = parseDouble(USERS.get(loggedIndex)[6]).doubleValue();
+        double balance = loggedUser.balance;
         if (balance < amount) {
             System.out.println("Error: insufficient balance.");
             return;
         }
 
         balance -= amount;
-        USERS.get(loggedIndex)[6] = String.valueOf(balance);
-        System.out.println("Withdrawal successful. Current balance: " + USERS.get(loggedIndex)[6]);
+        loggedUser.balance = balance;
+        System.out.println("Withdrawal successful. Current balance: " + loggedUser.balance);
     }
 
     private static void handleTransfer(String[] tokens) {
@@ -172,24 +170,25 @@ public class T2 {
             return;
         }
 
-        int targetIndex = findUserByCard(targetCard);
-        if (targetIndex == -1 || targetIndex == loggedIndex) {
+        User target = USERS_BY_CARD.get(targetCard);
+        if (target == null || target == loggedUser) {
             System.out.println("Error: invalid card number.");
             return;
         }
 
-        double balance = parseDouble(USERS.get(loggedIndex)[6]).doubleValue();
+        double balance = loggedUser.balance;
         if (balance < amount) {
             System.out.println("Error: insufficient balance.");
             return;
         }
 
-        double targetBalance = parseDouble(USERS.get(targetIndex)[6]).doubleValue();
+        double targetBalance = target.balance;
+
         balance -= amount;
         targetBalance += amount;
 
-        USERS.get(loggedIndex)[6] = String.valueOf(balance);
-        USERS.get(targetIndex)[6] = String.valueOf(targetBalance);
+        loggedUser.balance = balance;
+        target.balance = targetBalance;
 
         System.out.println("Transferred successfully.");
     }
@@ -199,21 +198,16 @@ public class T2 {
             System.out.println("Error: no user is logged in.");
             return;
         }
-        loggedIndex = -1;
+        loggedUser = null;
         System.out.println("Logout successful.");
     }
 
     private static boolean isLoggedIn() {
-        return loggedIndex >= 0 && loggedIndex < USERS.size();
+        return loggedUser != null;
     }
 
     private static boolean isUsernameUnique(String username) {
-        for (int i = 0; i < USERS.size(); i++) {
-            if (USERS.get(i)[0].equals(username)) {
-                return false;
-            }
-        }
-        return true;
+        return !USERS_BY_USERNAME.containsKey(username);
     }
 
     private static boolean isValidPhone(String phone) {
@@ -253,6 +247,11 @@ public class T2 {
 
     private static String generateCardNumber() {
         String card = java.lang.Long.toString(nextCard);
+        // تا وقتی یکتا نشده، ادامه بده
+        while (USERS_BY_CARD.containsKey(card)) {
+            nextCard++;
+            card = java.lang.Long.toString(nextCard);
+        }
         nextCard++;
         return card;
     }
@@ -265,29 +264,12 @@ public class T2 {
         }
     }
 
-    private static int findUserByCard(String card) {
-        for (int i = 0; i < USERS.size(); i++) {
-            if (USERS.get(i)[5].equals(card)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     private static void addUser(String username, String password, String fullName,
                                 String cardNumber, String phone, String email, double balance) {
 
-        String[] user = new String[7];
-
-        user[0] = username;
-        user[1] = password;
-        user[2] = fullName;
-        user[3] = phone;
-        user[4] = email;
-        user[5] = cardNumber;
-        user[6] = java.lang.Double.toString(balance);
-
-        USERS.add(user);
+        User u = new User(username, password, fullName, phone, email, cardNumber, balance);
+        USERS_BY_USERNAME.put(username, u);
+        USERS_BY_CARD.put(cardNumber, u);
     }
 
     private static String extractFullName(String line, String username, String password, String phone) {
@@ -340,5 +322,26 @@ public class T2 {
         for (int i = 0; i < count; i++) result[i] = temp[i];
 
         return result;
+    }
+
+    private static class User {
+        String username;
+        String password;
+        String fullName;
+        String phone;
+        String email;
+        String cardNumber;
+        double balance;
+
+        User(String username, String password, String fullName,
+             String phone, String email, String cardNumber, double balance) {
+            this.username = username;
+            this.password = password;
+            this.fullName = fullName;
+            this.phone = phone;
+            this.email = email;
+            this.cardNumber = cardNumber;
+            this.balance = balance;
+        }
     }
 }
